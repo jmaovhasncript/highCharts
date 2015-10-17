@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <script src="lib/jquery.js"></script>
+    <script src="lib/highcharts.js"></script>
+</head>
+<body>
+<div id="container" style="min-width: 810px; height: 400px; margin: 0 auto"></div>
+      <script>
+
+          $(function () {
+              $.getJSON('http://localhost:8010/totalUsage', function(data) {
+                  var chartData = {
+
+                  }
+
+                  chartData.clusterId =[];
+                  chartData.diskUsage = [];
+                   var counter =0;
+                  for(var key in data.diskUtils){
+//                      if(counter <100) {
+                          chartData.clusterId.push(data.diskUtils[key].data.cluster_id);
+                          chartData.diskUsage.push(data.diskUtils[key].diskUsage);
+                          counter++;
+
+//                      }
+//                      else{
+//                          break;
+//                      }
+                  }
+
+
+                  $('#container').highcharts({
+
+                      chart: {
+                          type: 'column'
+                      },
+                      turboThreshold :1000,
+                      title: {
+                          text: 'Total disk usage ' +data.totalUsage
+                      },
+
+                      xAxis: {
+                          categories: chartData.clusterId
+                      },
+
+                      yAxis: {
+                          allowDecimals: false,
+                          min: 0,
+                          title: {
+                              text: 'disk consumption'
+                          }
+                      },
+
+                      tooltip: {
+                          formatter: function () {
+                              return '<b> cluster_id:' + this.x + '</b><br/>' +
+                                      this.series.name + ': ' + this.y + '<br/>' +
+                                      'Total: ' + data.totalUsage;
+                          }
+                      },
+
+                      plotOptions: {
+                          column: {
+                              stacking: 'normal'
+                          }
+                      },
+
+                      series: [{
+                          data: chartData.diskUsage
+                      }]
+                  });
+
+              });
+
+
+
+
+
+          });
+
+
+
+
+
+      </script>
+</body>
+</html>
