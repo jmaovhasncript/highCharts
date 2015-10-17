@@ -12,73 +12,57 @@
 
           $(function () {
               $.getJSON('http://localhost:8010/totalUsage', function(data) {
-                  var chartData = {
-
-                  }
-
-                  chartData.clusterId =[];
-                  chartData.diskUsage = [];
-                   var counter =0;
-                  for(var key in data.diskUtils){
-//                      if(counter <100) {
-                          chartData.clusterId.push(data.diskUtils[key].data.cluster_id);
-                          chartData.diskUsage.push(data.diskUtils[key].diskUsage);
-                          counter++;
-
-//                      }
-//                      else{
-//                          break;
-//                      }
-                  }
-
-
-                  $('#container').highcharts({
-
-                      chart: {
-                          type: 'column'
-                      },
-                      turboThreshold :1000,
-                      title: {
-                          text: 'Total disk usage ' +data.totalUsage
-                      },
-
-                      xAxis: {
-                          categories: chartData.clusterId
-                      },
-
-                      yAxis: {
-                          allowDecimals: false,
-                          min: 0,
-                          title: {
-                              text: 'disk consumption'
-                          }
-                      },
-
-                      tooltip: {
-                          formatter: function () {
-                              return '<b> cluster_id:' + this.x + '</b><br/>' +
-                                      this.series.name + ': ' + this.y + '<br/>' +
-                                      'Total: ' + data.totalUsage;
-                          }
-                      },
-
-                      plotOptions: {
-                          column: {
-                              stacking: 'normal'
-                          }
-                      },
-
-                      series: [{
-                          data: chartData.diskUsage
+                  var diskUsage = {
+                      country_code : [],
+                      series :[{
+                          name:"disk usage",
+                          data :[]
                       }]
+                  };
+
+                  for(key in data.diskUtils){
+                      diskUsage.country_code.push(data.diskUtils[key].country_code);
+
+                      var totalUsage = data.diskUtils[key].disk_usage.reduce(function(pre,next){
+                          return pre+next;
+                      })
+
+                      diskUsage.series[0].data.push(totalUsage);
+
+
+                  };
+                  console.log(diskUsage);
+                  $(function () {
+                          $('#container').highcharts({
+                              chart: {
+                                  type: 'column'
+                              },
+                              title: {
+                                  text: 'Disk usage : ' + data.totalUsage
+                              },
+
+                              xAxis: {
+                                  categories:diskUsage.country_code,
+                                  crosshair: true
+                              },
+                              yAxis: {
+                                  min: 0,
+                                  title: {
+                                      text: 'Rainfall (mm)'
+                                  }
+                              },
+//
+                              plotOptions: {
+                                  column: {
+                                      pointPadding: 0.2,
+                                      borderWidth: 0
+                                  }
+                              },
+                              series: diskUsage.series
+                          });
                   });
 
-              });
-
-
-
-
-
+              })
           });
 
 
