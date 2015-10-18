@@ -1,87 +1,84 @@
-
+/***
+ *
+ * @type {*|exports|module.exports}
+ * This modele reads data from the file and merge data
+ * initiated the socket connection and trigger event on file change
+ */
 var express = require('express'),
-    fs = require('fs'),
     app = express(),
-    csv = require('fast-csv');
+    fs = require('fs'),
+    http = require('http').Server(app),
+    Promise = require('bluebird'),
+    io = require('socket.io')(http);
 
-app.use(express.static('publi'));
+app.use(express.static('public'));
 
-var totalDiskUtils =0 ;
-var cluster_location = {
+io.on('connection', function (socket) {
+    socket.emit('connection');
+    socket.on('diskUsage', function () {
+        socket.emit("diskUsage", {totalUsage: totalDiskUtils, diskUtils: location_precpctive});
 
-}
-var cluster_stream = fs.createReadStream("cluster-locations.csv");
-csv.fromStream(cluster_stream, {headers : true,ignoreEmpty: true}).on("data", function(data){
-    cluster_location[data.cluster_id] ={
-        data : data
-    }
-    //console.log(data);
-}).on("end", function(){
-    console.log("done");
-    //console.log(cluster_location);
-});
-
-
-var  cluster_disk = fs.createReadStream('cluster-disk-util.csv');
-
-var cluster_disk_util = {
-
-}
-
-csv.fromStream(cluster_disk, {headers : true,ignoreEmpty: true}).on("data", function(data){
-    cluster_disk_util[data.cluster_id] ={
-        data : data
-    }
-    totalDiskUtils += parseInt(data["disk_usage(MB)"]);
-
-    //console.log(data);
-}).on("end", function(){
-    console.log("done");
-    //console.log(cluster_disk_util);
+    });
 
 });
 
-var location_precpctive ={
+var fileReadModule = require('./fileReadModule'), cluster_location, cluster_stream, location_precpctive = {}, totalDiskUtils = 0;
+fileRun();
+watchFile('cluster-locations.csv');
+watchFile('cluster-disk-util.csv');
 
-}
 
-app.get('/totalUsage', function(req, res){
-    debugger;
+function fileRun() {
+    var promise_cluster = fileReadModule('cluster-locations.csv');
 
-    for(var key in cluster_location){
-        cluster_location[key].diskUsage = parseInt(cluster_disk_util[key].data["disk_usage(MB)"]);
-        cluster_location[key].timeStamp = cluster_disk_util[key].data["timestamp"];
-    }
+    promise_cluster.then(function (data) {
+        cluster_location = data.dataStream;
+    });
 
-    //console.log(cluster_location);
+    var promise_disk_usage = fileReadModule('cluster-disk-util.csv', true);
 
-    for(key in cluster_location){
-        console.log(cluster_location[key]);
-
-        if(!location_precpctive[cluster_location[key].data.country_code]){
-            location_precpctive[cluster_location[key].data.country_code] = {
-                country_code : cluster_location[key].data.country_code ,
-                cluster_id :[cluster_location[key].data.cluster_id],
-                disk_usage:[cluster_location[key].diskUsage],
-                timeStamp :[cluster_location[key].timeStamp]
-            }
-        }else{
-            location_precpctive[cluster_location[key].data.country_code].cluster_id.push(cluster_location[key].data.cluster_id);
-            location_precpctive[cluster_location[key].data.country_code].disk_usage.push(cluster_location[key].diskUsage);
-            location_precpctive[cluster_location[key].data.country_code].timeStamp.push(cluster_location[key].timeStamp);
-
+    promise_disk_usage.then(function (data) {
+        cluster_stream = data.dataStream;
+        totalDiskUtils = data.totalDiskUtils
+    });
+    Promise.settle([promise_cluster, promise_disk_usage]).then(function () {
+        for (var key in cluster_location) {
+            cluster_location[key].diskUsage = parseInt(cluster_stream[key].data["disk_usage(MB)"]);
+            cluster_location[key].timeStamp = cluster_stream[key].data["timestamp"];
         }
-    }
 
-    console.log(location_precpctive);
+        for (key in cluster_location) {
 
+            if (!location_precpctive[cluster_location[key].data.country_code]) {
+                location_precpctive[cluster_location[key].data.country_code] = {
+                    country_code: cluster_location[key].data.country_code,
+                    cluster_id: [cluster_location[key].data.cluster_id],
+                    disk_usage: [cluster_location[key].diskUsage],
+                    timeStamp: [cluster_location[key].timeStamp]
+                }
+            } else {
+                location_precpctive[cluster_location[key].data.country_code].cluster_id.push(cluster_location[key].data.cluster_id);
+                location_precpctive[cluster_location[key].data.country_code].disk_usage.push(cluster_location[key].diskUsage);
+                location_precpctive[cluster_location[key].data.country_code].timeStamp.push(cluster_location[key].timeStamp);
 
+            }
+        }
+    });
+}
 
-    res.status(200).send({totalUsage : totalDiskUtils,diskUtils :location_precpctive});
+function watchFile(fileName) {
+    fs.watchFile(fileName, function (curr, prev) {
+        fileRun();
+        io.emit("diskUsage", {totalUsage: totalDiskUtils, diskUtils: location_precpctive});
+    });
+};
+
+app.get('/totalUsage', function (req, res) {
+    res.status(200).send({totalUsage: totalDiskUtils, diskUtils: location_precpctive});
     res.end();
 });
 
 
-
-
-app.listen('8010');
+http.listen(3000, function () {
+    console.log('listening on *:3000');
+});

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <script src="lib/jquery-1.11.3.js"></script>
+    <script src="lib/highcharts.js"></script>
+    <script src="lib/socket.js"></script>
+    <style>
+        #dropDown {
+            float: right;
+            margin-right: 100px;
+            position: relative;
+            margin-top: 50px;
+            height: 30px;
+        }
+    </style>
+
+</head>
+<body>
+
+<select id="dropDown">
+    <option value="" disabled="disabled" selected="selected">Please select a country</option>
+    <option value="all">all</option>
+</select>
+
+<div id="container" style="min-width: 810px; height: 400px; margin: 0 auto"></div>
+<script>
+
+
+    $(function () {
+        var jsonData, diskUsage = {
+            country_code: [],
+            series: [{
+                name: "cluster",
+                data: []
+            }]
+        };
+        var socket = io.connect('http://localhost:3000');
+        socket.on('connection', function () {
+            socket.emit('diskUsage');
+            socket.on('diskUsage', function (data) {
+                console.log("getData called");
+                getData(data);
+            });
+        });
+
+        var getData = function (data) {
+            jsonData = data;
+            arrangeData();
+            createMap(diskUsage);
+            addOption(diskUsage.country_code);
+
+        };
+
+        function arrangeData() {
+            for (key in jsonData.diskUtils) {
+                diskUsage.country_code.push(jsonData.diskUtils[key].country_code);
+
+                var totalUsage = jsonData.diskUtils[key].disk_usage.reduce(function (pre, next) {
+                    return pre + next;
+                })
+
+                diskUsage.series[0].data.push(totalUsage);
+
+            }
+            ;
+        };
+        function addOption(items) {
+            var parentElement = document.querySelector('#dropDown');
+            var element = window.document.createDocumentFragment();
+            items.forEach(function (item) {
+                var opt = document.createElement("option");
+                opt.value = item;
+                opt.text = item;
+                element.appendChild(opt);
+            });
+
+            parentElement.appendChild(element);
+
+            parentElement.onchange = function () {
+                if (this.value === "all") {
+                    createMap(diskUsage);
+                    return;
+                }
+                var val = this.value;
+                var currentCountryData = jsonData.diskUtils[this.value];
+                var newData = {
+                    country_code: currentCountryData.cluster_id,
+                    series: [{
+                        name: "cluster",
+                        data: currentCountryData.disk_usage
+                    }]
+                };
+
+
+                createMap(newData);
+            }
+
+        };
+        function createMap(graphData) {
+            $('#container').highcharts({
+                chart: {
+                    type: 'column'
+                },
+                title: {
+                    text: 'Disk usage : ' + jsonData.totalUsage
+                },
+
+                xAxis: {
+                    categories: graphData.country_code,
+                    crosshair: true
+                },
+                yAxis: {
+                    min: 0,
+                    title: {
+                        text: 'disk usage'
+                    }
+                },
+                plotOptions: {
+                    column: {
+                        pointPadding: 0.2,
+                        borderWidth: 0
+                    }
+                },
+                series: graphData.series
+            });
+        }
+
+    })
+
+
+</script>
+
+</body>
+</html>
